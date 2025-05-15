@@ -9,6 +9,35 @@ def get_gsheet_client():
     creds = ServiceAccountCredentials.from_json_keyfile_name("credentials/google-credentials.json", scope)
     return gspread.authorize(creds)
 
+# Load branch data from sheet
+def load_branch_data():
+    gc = get_gspread_client()
+    sheet = gc.open("BranchData").sheet1
+    df = get_as_dataframe(sheet, evaluate_formulas=True).dropna(how='all')
+    
+    branch_data = {}
+    for _, row in df.iterrows():
+        if pd.notna(row["Branch Code"]) and pd.notna(row["Branch Name"]):
+            code = str(row["Branch Code"])
+            name = row["Branch Name"]
+            riders = [r.strip() for r in str(row["Riders"]).split(",")] if pd.notna(row["Riders"]) else []
+            branch_data[code] = (name, riders)
+    return branch_data
+
+# Save branch data to sheet
+def save_branch_data(branch_data):
+    gc = get_gspread_client()
+    sheet = gc.open("BranchData").sheet1
+    data = []
+
+    for code, (name, riders) in branch_data.items():
+        rider_str = ", ".join(riders)
+        data.append([code, name, rider_str])
+
+    df = pd.DataFrame(data, columns=["Branch Code", "Branch Name", "Riders"])
+    sheet.clear()
+    set_with_dataframe(sheet, df)
+    
 def save_to_google_sheets():
     client = get_gsheet_client()
     spreadsheet = client.open("Rider Slip Data")  # Your actual Google Sheet name
