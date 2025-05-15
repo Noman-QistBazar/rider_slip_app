@@ -3,11 +3,17 @@ import pandas as pd
 from oauth2client.service_account import ServiceAccountCredentials
 from gspread_dataframe import set_with_dataframe
 from modules.utils import DATA_FILE
+from google.oauth2.service_account import Credentials
 
 def get_gsheet_client():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("credentials/google-credentials.json", scope)
+    creds_dict = st.secrets["service_account"]
+    creds = Credentials.from_service_account_info(creds_dict, scopes=["https://www.googleapis.com/auth/spreadsheets"])
     return gspread.authorize(creds)
+    
+# def get_gsheet_client():
+#     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+#     creds = ServiceAccountCredentials.from_json_keyfile_name("credentials/google-credentials.json", scope)
+#     return gspread.authorize(creds)
 
 # Load branch data from sheet
 def load_branch_data():
