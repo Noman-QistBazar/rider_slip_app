@@ -9,6 +9,10 @@ from modules.utils import load_branch_data, save_branch_data
 load_dotenv()
 ADMIN_SECRET = os.getenv("ADMIN_SECRET")
 
+if "branch_data" not in st.session_state:
+    st.session_state.branch_data = load_branch_data()
+
+branch_data = st.session_state.branch_data
 
 if 'branch_data' not in st.session_state:
     st.session_state.branch_data = load_branch_data()
