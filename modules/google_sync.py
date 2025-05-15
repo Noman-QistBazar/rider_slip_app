@@ -8,8 +8,8 @@ from google.oauth2.service_account import Credentials
 def get_gsheet_client():
     creds_dict = st.secrets["service_account"]
     creds = Credentials.from_service_account_info(creds_dict, scopes=["https://www.googleapis.com/auth/spreadsheets"])
-    return gspread.authorize(creds)
-    
+    client = gspread.authorize(creds)
+    return client
 # def get_gsheet_client():
 #     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 #     creds = ServiceAccountCredentials.from_json_keyfile_name("credentials/google-credentials.json", scope)
