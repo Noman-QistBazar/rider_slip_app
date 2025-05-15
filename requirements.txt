@@ -5,3 +5,8 @@ xlsxwriter
 gspread
 oauth2client
 python-dotenv
+streamlit
+gspread
+gspread_dataframe
+pandas
+oauth2client
