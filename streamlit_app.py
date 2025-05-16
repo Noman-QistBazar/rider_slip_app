@@ -42,7 +42,7 @@ st.set_page_config(page_title="Slip Entry", layout="centered")
 st.title("📦 Recovery Commission Slip Submission")
 
 # Branch code input with improved UX
-branch_code = st.text_input("Enter Branch Code", max_chars=10, help="Enter your 10-digit branch code or admin secret.")
+branch_code = st.text_input("Enter Branch Code", max_chars=10, help="Enter your 10-digit branch code.")
 
 if branch_code:
     if branch_code == ADMIN_SECRET:
