@@ -7,7 +7,7 @@ from google.oauth2.service_account import Credentials
 
 def get_gsheet_client():
     creds_dict = st.secrets["service_account"]
-    creds = Credentials.from_service_account_info(creds_dict, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+    creds = Credentials.from_service_account_info(creds_dict)
     client = gspread.authorize(creds)
     return client
 # def get_gsheet_client():
