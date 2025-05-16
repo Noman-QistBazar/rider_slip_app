@@ -25,6 +25,8 @@ ensure_valid_excel()
 
 st.set_page_config("Slip Entry", layout="centered")
 st.title("📦 Recovery Commission Slip Submission")
+st.write(st.secrets.keys())
+
 
 branch_code = st.text_input("Enter Branch Code")
 
