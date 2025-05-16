@@ -11,9 +11,9 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Helper to load branch data from Supabase
 def load_branch_data():
-    response = supabase.table("branches").select("*").execute()
+    response = supabase.table("slips").select("*").execute()
     data = response.data or []
-    # Convert to dict: {branch_code: (branch_name, riders)}
+    # Convert to dict: {branch_code: (branch_name, riders)
     return {item["branch_code"]: (item["branch_name"], item["riders"]) for item in data}
 
 # Helper to save branch data (if needed)
