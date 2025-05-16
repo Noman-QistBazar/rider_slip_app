@@ -9,12 +9,20 @@ ADMIN_SECRET = st.secrets["ADMIN_SECRET"]
 # Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Helper to load branch data from Supabase
 def load_branch_data():
-    response = supabase.table("slips").select("*").execute()
-    data = response.data or []
-    # Convert to dict: {branch_code: (branch_name, riders)
-    return {item["branch_code"]: (item["branch_name"], item["riders"]) for item in data}
+    # Assuming you want to load from 'branches' table, not slips
+    response = supabase.table("branches").select("*").execute()
+    if response.error:
+        raise Exception(f"Failed to load branch data: {response.error.message}")
+    data = response.data
+    branch_data = {}
+    for item in data:
+        branch_code = item["branch_code"]
+        branch_name = item["branch_name"]
+        riders = item.get("riders", [])
+        branch_data[branch_code] = (branch_name, riders)
+    return branch_data
+
 
 # Helper to save branch data (if needed)
 def save_branch_data(branch_data):
