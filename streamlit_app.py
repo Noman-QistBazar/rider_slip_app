@@ -11,10 +11,8 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def load_branch_data():
     # Assuming you want to load from 'branches' table, not slips
-    response = supabase.table("branches").select("*").execute()
-    if response.error:
-        raise Exception(f"Failed to load branch data: {response.error.message}")
-    data = response.data
+    rresponse = supabase.table("branches").select("*").execute()
+data = response.data if hasattr(response, "data") else response
     branch_data = {}
     for item in data:
         branch_code = item["branch_code"]
