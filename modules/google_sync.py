@@ -4,13 +4,22 @@ from oauth2client.service_account import ServiceAccountCredentials
 from gspread_dataframe import set_with_dataframe
 from modules.utils import DATA_FILE
 from google.oauth2.service_account import Credentials
-
+import gspread
+import streamlit as st
+from google.oauth2.service_account import Credentials
 
 def get_gsheet_client():
     creds_dict = st.secrets["service_account"]
-    creds = Credentials.from_service_account_info(creds_dict)
-    client = gspread.authorize(creds)
-    return client
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    return gspread.authorize(credentials)
+
+
+# def get_gsheet_client():
+#     creds_dict = st.secrets["service_account"]
+#     creds = Credentials.from_service_account_info(creds_dict)
+#     client = gspread.authorize(creds)
+#     return client
 # def get_gsheet_client():
 #     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 #     creds = ServiceAccountCredentials.from_json_keyfile_name("credentials/google-credentials.json", scope)
