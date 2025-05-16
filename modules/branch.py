@@ -1,63 +1,106 @@
 import os
-import hashlib
+import streamlit as st
 from datetime import datetime
+from modules.utils import (
+    file_hash, save_image_and_hash, is_duplicate_image,
+    calculate_commission, generate_weeks, IMAGE_ROOT
+)
+from supabase_client import supabase
 
-# Constants
-DATA_FILE = "data/branch_data.xlsx"  # Path to your Excel data file
-IMAGE_HASH_FILE = "data/image_hashes.txt"  # To track image hashes to avoid duplicates
+REQUESTS_TABLE = "requests"
+SLIPS_TABLE = "slips"
 
-# Calculate SHA256 hash of uploaded file (Streamlit file uploader)
-def file_hash(uploaded_file):
-    hasher = hashlib.sha256()
-    file_bytes = uploaded_file.getbuffer()
-    hasher.update(file_bytes)
-    return hasher.hexdigest()
+def save_request(request_data):
+    response = supabase.table(REQUESTS_TABLE).insert(request_data).execute()
+    if response.status_code == 201:
+        st.success("Change request submitted.")
+    else:
+        st.error("Failed to submit request.")
 
-# Save uploaded image to disk and record its hash
-def save_image_and_hash(uploaded_file, folder, filename):
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-    file_path = os.path.join(folder, filename)
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-
-    # Save hash to hash file (optional for checking duplicates)
-    hash_val = file_hash(uploaded_file)
-    with open(IMAGE_HASH_FILE, "a") as f:
-        f.write(hash_val + "\n")
-
-    return file_path
-
-# Check if an image hash already exists in folder (duplicate detection)
-def is_duplicate_image(hash_val, folder):
-    if not os.path.exists(IMAGE_HASH_FILE):
+def save_slip_entry(entry):
+    response = supabase.table(SLIPS_TABLE).insert(entry).execute()
+    if response.status_code == 201:
+        return True
+    else:
+        st.error("Failed to save slip entry.")
         return False
-    with open(IMAGE_HASH_FILE, "r") as f:
-        hashes = f.read().splitlines()
-    return hash_val in hashes
 
-# Calculate commission based on slip quantity and type
-def calculate_commission(slip_qty, slip_type):
-    # Example: Cash slip = 10 per slip, Online slip = 12 per slip
-    rates = {"Cash Slip": 10, "Online Slip": 12}
-    return slip_qty * rates.get(slip_type, 0)
+def branch_panel(branch_code, branch_name, riders):
+    week_options = generate_weeks()
+    week_labels = [f"{s.date()} to {e.date()}" for s, e in week_options]
+    selected_label = st.selectbox("Select Week", week_labels)
+    selected_start, selected_end = week_options[week_labels.index(selected_label)]
 
-# Generate weekly date ranges (last 4 weeks as example)
-def generate_weeks():
-    weeks = []
-    today = datetime.today()
-    for i in range(4):
-        end_date = today.replace(hour=0, minute=0, second=0, microsecond=0)
-        start_date = end_date - timedelta(days=6)
-        weeks.append((start_date, end_date))
-        today = start_date - timedelta(days=1)
-    return weeks[::-1]  # Return in ascending order
+    if 'slip_entries' not in st.session_state:
+        st.session_state.slip_entries = []
 
-# Backup Excel data file (creates timestamped copy)
-def backup_data():
-    if os.path.exists(DATA_FILE):
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_file = f"data/backup_{timestamp}.xlsx"
-        with open(DATA_FILE, "rb") as original, open(backup_file, "wb") as backup:
-            backup.write(original.read())
+    st.markdown("### ➕ Add Rider Slips")
 
+    slip_type = st.radio("Slip Type", ["Cash Slip", "Online Slip"])
+
+    with st.form("rider_form", clear_on_submit=True):
+        rider_name = st.selectbox("Select Rider", riders)
+        slip_qty = st.number_input("Slip Quantity", min_value=1)
+        manager_name = st.text_input("Your Name")
+        txn_id = st.text_input("Transaction ID" if slip_type == "Online Slip" else "Serial Number")
+        slip_img = st.file_uploader("Upload Slip Image", type=["jpg", "jpeg", "png", "pdf"])
+
+        if st.form_submit_button("Add to List"):
+            if not txn_id:
+                st.error("Transaction ID is required.")
+            elif slip_img is None:
+                st.warning("Slip image is required.")
+            else:
+                folder = os.path.join(IMAGE_ROOT, branch_code, rider_name)
+                hash_val = file_hash(slip_img)
+                if is_duplicate_image(hash_val, folder):
+                    st.error("Duplicate image detected.")
+                else:
+                    filename = f"{int(datetime.now().timestamp())}_{slip_img.name}"
+                    save_image_and_hash(slip_img, folder, filename)
+
+                    st.session_state.slip_entries.append({
+                        "Rider Name": rider_name,
+                        "Slip Type": slip_type,
+                        "Slip Quantity": slip_qty,
+                        "Transaction ID": txn_id,
+                        "Image Path": filename,
+                        "Submitted By": manager_name,
+                        "Branch Code": branch_code,
+                        "Week": selected_label,
+                        "Commission": calculate_commission(slip_qty, slip_type),
+                        "Submitted At": datetime.now().isoformat()
+                    })
+                    st.success("Entry added.")
+
+    if st.session_state.slip_entries:
+        st.markdown("### 📋 Preview Entries")
+        st.dataframe(st.session_state.slip_entries)
+
+        if st.button("✅ Submit All Entries"):
+            errors = 0
+            for entry in st.session_state.slip_entries:
+                if not save_slip_entry(entry):
+                    errors += 1
+            if errors == 0:
+                st.success("All entries submitted successfully.")
+                st.session_state.slip_entries = []
+            else:
+                st.error(f"{errors} entries failed to save.")
+
+        st.markdown("---")
+        st.markdown("### Submit Change Request")
+        desc = st.text_area("Describe your requested changes")
+        if st.button("Submit Change Request"):
+            if desc and manager_name:
+                request_data = {
+                    "Request Type": "Change",
+                    "Branch Code": branch_code,
+                    "Requested By": manager_name,
+                    "Description": desc,
+                    "Timestamp": datetime.now().isoformat(),
+                    "Status": "Pending"
+                }
+                save_request(request_data)
+            else:
+                st.warning("Please enter your name and describe the change.")
