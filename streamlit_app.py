@@ -1,5 +1,6 @@
 import streamlit as st
 from supabase import create_client, Client
+from supabase_client import supabase
 
 # Read Supabase credentials from Streamlit secrets
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -9,16 +10,18 @@ ADMIN_SECRET = st.secrets["ADMIN_SECRET"]
 # Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+
 def load_branch_data():
-    # Assuming you want to load from 'branches' table, not slips
-    rresponse = supabase.table("branches").select("*").execute()
-data = response.data if hasattr(response, "data") else response
+    response = supabase.table("branches").select("*").execute()
+    data = response.data if hasattr(response, "data") else response
+
     branch_data = {}
-    for item in data:
-        branch_code = item["branch_code"]
-        branch_name = item["branch_name"]
-        riders = item.get("riders", [])
-        branch_data[branch_code] = (branch_name, riders)
+    for row in data:
+        code = row.get("branch_code")
+        name = row.get("branch_name")
+        riders = row.get("riders", [])
+        if code and name:
+            branch_data[code] = (name, riders)
     return branch_data
 
 
