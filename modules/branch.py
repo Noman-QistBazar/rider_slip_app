@@ -1,105 +1,120 @@
-import os
 import streamlit as st
-from datetime import datetime
+from supabase_client import get_supabase
 from modules.utils import (
-    file_hash, save_image_and_hash, is_duplicate_image,
-    calculate_commission, generate_weeks, IMAGE_ROOT
+    calculate_commission,
+    generate_week_ranges,
+    save_uploaded_image,
+    validate_transaction_id
 )
-from supabase_client import supabase  # Your Supabase client instance
+from datetime import datetime
+import pandas as pd
 
-REQUESTS_TABLE = "requests"
-SLIPS_TABLE = "slips"
-
-def save_request(request_data):
-    response = supabase.table(REQUESTS_TABLE).insert(request_data).execute()
-    if response.status_code == 201:
-        st.success("Change request submitted.")
-    else:
-        st.error("Failed to submit request.")
-
-def save_slip_entry(entry):
-    response = supabase.table(SLIPS_TABLE).insert(entry).execute()
-    if response.status_code == 201:
-        return True
-    else:
-        st.error("Failed to save slip entry.")
-        return False
-
-def branch_panel(branch_code, branch_name, riders):
-    week_options = generate_weeks()
-    week_labels = [f"{s.date()} to {e.date()}" for s, e in week_options]
-    selected_label = st.selectbox("Select Week", week_labels)
-
+def show_branch_panel():
+    """Display the branch manager interface"""
+    st.title("Branch Slip Submission")
+    branch_code = st.session_state.branch_code
+    
+    # Get branch details
+    supabase = get_supabase()
+    branch_data = supabase.table('branches').select('name, riders').eq('code', branch_code).execute().data[0]
+    branch_name = branch_data['name']
+    riders = branch_data['riders'] or []
+    
+    if not riders:
+        st.warning("No riders assigned to this branch. Please contact admin.")
+        return
+    
+    # Week selection
+    week_options = generate_week_ranges()
+    selected_week = st.selectbox(
+        "Select Week",
+        options=[week[0] for week in week_options],
+        index=0
+    )
+    
+    # Initialize session state for slip entries
     if 'slip_entries' not in st.session_state:
         st.session_state.slip_entries = []
-
-    st.markdown("### ➕ Add Rider Slips")
-
-    slip_type = st.radio("Slip Type", ["Cash Slip", "Online Slip"])
-
-    with st.form("rider_form", clear_on_submit=True):
-        rider_name = st.selectbox("Select Rider", riders)
-        slip_qty = st.number_input("Slip Quantity", min_value=1)
-        manager_name = st.text_input("Your Name")
-        txn_id = st.text_input("Transaction ID" if slip_type == "Online Slip" else "Serial Number")
-        slip_img = st.file_uploader("Upload Slip Image", type=["jpg", "jpeg", "png", "pdf"])
-
-        if st.form_submit_button("Add to List"):
-            if not txn_id:
-                st.error("Transaction ID is required.")
-            elif slip_img is None:
-                st.warning("Slip image is required.")
+    
+    # Slip submission form
+    with st.form("slip_form"):
+        st.subheader("Add New Slip")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            rider_name = st.selectbox("Rider", options=riders)
+            slip_type = st.radio("Slip Type", ["Cash Slip", "Online Slip"])
+            slip_qty = st.number_input("Quantity", min_value=1, value=1)
+        
+        with col2:
+            transaction_label = "Transaction ID" if slip_type == "Online Slip" else "Serial Number"
+            transaction_id = st.text_input(transaction_label)
+            manager_name = st.text_input("Manager Name")
+            slip_image = st.file_uploader("Slip Image", type=["jpg", "jpeg", "png", "pdf"])
+        
+        submitted = st.form_submit_button("Add Slip")
+        
+        if submitted:
+            if not validate_transaction_id(slip_type, transaction_id):
+                st.error(f"Please enter a valid {transaction_label}")
+            elif not slip_image:
+                st.error("Please upload slip image")
             else:
-                folder = os.path.join(IMAGE_ROOT, branch_code, rider_name)
-                hash_val = file_hash(slip_img)
-                if is_duplicate_image(hash_val, folder):
-                    st.error("Duplicate image detected.")
-                else:
-                    filename = f"{int(datetime.now().timestamp())}_{slip_img.name}"
-                    save_image_and_hash(slip_img, folder, filename)
-
-                    st.session_state.slip_entries.append({
-                        "Rider Name": rider_name,
-                        "Slip Type": slip_type,
-                        "Slip Quantity": slip_qty,
-                        "Transaction ID": txn_id,
-                        "Image Path": filename,
-                        "Submitted By": manager_name,
-                        "Branch Code": branch_code,
-                        "Week": selected_label,
-                        "Commission": calculate_commission(slip_qty, slip_type),
-                        "Submitted At": datetime.now().isoformat()
-                    })
-                    st.success("Entry added.")
-
+                try:
+                    image_path = save_uploaded_image(slip_image, branch_code, rider_name)
+                    commission = calculate_commission(slip_type, slip_qty)
+                    
+                    new_entry = {
+                        "rider_name": rider_name,
+                        "slip_type": slip_type,
+                        "quantity": slip_qty,
+                        "transaction_id": transaction_id,
+                        "manager_name": manager_name,
+                        "image_path": image_path,
+                        "week": selected_week,
+                        "branch_code": branch_code,
+                        "commission": commission,
+                        "submitted_at": datetime.now().isoformat(),
+                        "status": "pending"
+                    }
+                    
+                    st.session_state.slip_entries.append(new_entry)
+                    st.success("Slip added successfully!")
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+    
+    # Display current entries
     if st.session_state.slip_entries:
-        st.markdown("### 📋 Preview Entries")
-        st.dataframe(st.session_state.slip_entries)
-
-        if st.button("✅ Submit All Entries"):
-            errors = 0
-            for entry in st.session_state.slip_entries:
-                if not save_slip_entry(entry):
-                    errors += 1
-            if errors == 0:
-                st.success("All entries submitted successfully.")
+        st.subheader("Current Slips")
+        df = pd.DataFrame(st.session_state.slip_entries)
+        st.dataframe(df[['rider_name', 'slip_type', 'quantity', 'commission']])
+        
+        # Submit all button
+        if st.button("Submit All Slips"):
+            try:
+                supabase.table('slips').insert(st.session_state.slip_entries).execute()
                 st.session_state.slip_entries = []
-            else:
-                st.error(f"{errors} entries failed to save.")
-
-        st.markdown("---")
-        st.markdown("### Submit Change Request")
-        desc = st.text_area("Describe your requested changes")
-        if st.button("Submit Change Request"):
-            if desc and manager_name:
-                request_data = {
-                    "Request Type": "Change",
-                    "Branch Code": branch_code,
-                    "Requested By": manager_name,
-                    "Description": desc,
-                    "Timestamp": datetime.now().isoformat(),
-                    "Status": "Pending"
-                }
-                save_request(request_data)
-            else:
-                st.warning("Please enter your name and describe the change.")
+                st.success("All slips submitted successfully!")
+            except Exception as e:
+                st.error(f"Submission failed: {str(e)}")
+    
+    # Change request form
+    st.subheader("Change Request")
+    with st.form("change_request"):
+        request_description = st.text_area("Describe the changes needed")
+        submit_request = st.form_submit_button("Submit Request")
+        
+        if submit_request and request_description:
+            request_data = {
+                "branch_code": branch_code,
+                "description": request_description,
+                "status": "pending",
+                "requested_at": datetime.now().isoformat(),
+                "requested_by": manager_name or "Unknown"
+            }
+            
+            try:
+                supabase.table('change_requests').insert(request_data).execute()
+                st.success("Change request submitted!")
+            except Exception as e:
+                st.error(f"Failed to submit request: {str(e)}")
