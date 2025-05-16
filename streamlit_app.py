@@ -25,7 +25,7 @@ ensure_valid_excel()
 
 st.set_page_config("Slip Entry", layout="centered")
 st.title("📦 Recovery Commission Slip Submission")
-print("Loaded secrets:", list(st.secrets.keys()))
+
 
 
 
