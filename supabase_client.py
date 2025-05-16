@@ -1,6 +1,8 @@
 from supabase import create_client
 import os
 from dotenv import load_dotenv
+from modules.branch import branch_panel
+
 
 # Load environment variables
 load_dotenv()
