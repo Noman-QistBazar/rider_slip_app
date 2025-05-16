@@ -4,6 +4,8 @@ from oauth2client.service_account import ServiceAccountCredentials
 from gspread_dataframe import set_with_dataframe
 from modules.utils import DATA_FILE
 from google.oauth2.service_account import Credentials
+from modules.google_sync import get_gsheet_client
+
 
 def get_gsheet_client():
     creds_dict = st.secrets["service_account"]
